@@ -1,5 +1,7 @@
 """
-Configuration and PostgreSQL standards repository connection
+Configuration management and PostgreSQL standards repository
+Author: John May
+Version: 1.0.0-alpha
 """
 
 import os
@@ -19,6 +21,8 @@ except ImportError:
 
 @dataclass
 class PiecemarkStandard:
+    """Fabricator piecemark standard configuration"""
+
     fabricator_id: str
     fabricator_name: str
     major_prefixes: Dict[str, str] = field(default_factory=dict)
@@ -28,20 +32,22 @@ class PiecemarkStandard:
 
 
 class Config:
+    """Main configuration for the QA/QC verification tool"""
+
     DEFAULT_SYSTEM_PATTERNS = [
-        r"^[A-Z]{1,3}_\d+$",
-        r"^[A-Z]{1,2}M_\d+$",
-        r"^[A-Z]{1,2}C_\d+$",
-        r"^[A-Z]{1,2}VB_\d+$",
-        r"^[A-Z]{1,2}V\d+$",
-        r"^[A-Z]{1,2}H_\d+$",
-        r"^[A-Z]{1,2}P\d+$",
-        r"^[a-z]\d+$",
-        r"^p\d+$",
-        r"^m\d+$",
-        r"^b\d+$",
-        r"^c\d+$",
-        r"^vb\d+$",
+        r"^[A-Z]{1,3}_\d+$",  # B_1, VB_1, M_1, C_1
+        r"^[A-Z]{1,2}M_\d+$",  # BM_1, CM_1
+        r"^[A-Z]{1,2}C_\d+$",  # BC_1, CC_1
+        r"^[A-Z]{1,2}VB_\d+$",  # VB_1
+        r"^[A-Z]{1,2}V\d+$",  # V1, V2
+        r"^[A-Z]{1,2}H_\d+$",  # H_1
+        r"^[A-Z]{1,2}P\d+$",  # P1, P2
+        r"^[a-z]\d+$",  # p1, m1, b1
+        r"^p\d+$",  # p1, p2
+        r"^m\d+$",  # m1, m2
+        r"^b\d+$",  # b1, b2
+        r"^c\d+$",  # c1, c2
+        r"^vb\d+$",  # vb1, vb2
     ]
 
     def __init__(self, config_path: Optional[str] = None):
@@ -63,6 +69,7 @@ class Config:
         config._raw_config = data
         return config
 
+    # Path properties
     @property
     def data_directory(self) -> str:
         return self._raw_config.get("data_directory", "")
@@ -86,6 +93,7 @@ class Config:
     def page_margin_inches(self) -> float:
         return self._raw_config.get("page_margin_inches", 0.5)
 
+    # Database properties
     @property
     def db_host(self) -> str:
         return self._raw_config.get("db_host", "localhost")
@@ -107,7 +115,9 @@ class Config:
         return self._raw_config.get("db_password", "")
 
     def connect_db(self) -> bool:
+        """Connect to PostgreSQL database"""
         if not PSYCOPG2_AVAILABLE:
+            print("Warning: psycopg2 not available, using defaults")
             return False
         try:
             self._db_conn = psycopg2.connect(
@@ -123,11 +133,13 @@ class Config:
             return False
 
     def disconnect_db(self) -> None:
+        """Disconnect from database"""
         if self._db_conn:
             self._db_conn.close()
             self._db_conn = None
 
     def load_piecemark_standards(self) -> PiecemarkStandard:
+        """Load piecemark standards from database or use defaults"""
         if self._piecemark_standard:
             return self._piecemark_standard
 
@@ -159,6 +171,7 @@ class Config:
             except Exception as e:
                 print(f"Error loading standards from DB: {e}")
 
+        # Fallback to defaults
         self._piecemark_standard = PiecemarkStandard(
             fabricator_id=self.fabricator_id,
             fabricator_name="Default",
@@ -168,6 +181,7 @@ class Config:
         return self._piecemark_standard
 
     def get_system_patterns(self) -> List[str]:
+        """Get system mark regex patterns"""
         standards = self.load_piecemark_standards()
         return (
             standards.system_patterns
@@ -176,6 +190,7 @@ class Config:
         )
 
     def is_system_mark(self, piecemark: str) -> bool:
+        """Check if a piecemark matches system mark patterns"""
         if not piecemark:
             return False
         patterns = self.get_system_patterns()
@@ -188,6 +203,7 @@ class Config:
         return False
 
     def validate_paths(self) -> bool:
+        """Validate configuration paths exist"""
         if self.data_directory and not os.path.exists(self.data_directory):
             return False
         output_dir = os.path.dirname(self.output_path)
@@ -197,6 +213,7 @@ class Config:
 
 
 def create_default_config(output_path: str = None) -> dict:
+    """Create a default configuration dictionary"""
     return {
         "data_directory": "",
         "job_name": "Current Job",

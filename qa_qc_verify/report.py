@@ -1,5 +1,7 @@
 """
 Report generation for QA/QC verification results
+Author: John May
+Version: 1.0.0-alpha
 """
 
 from dataclasses import dataclass, field
@@ -18,6 +20,8 @@ class Severity(Enum):
 
 @dataclass
 class Issue:
+    """Represents a single verification issue"""
+
     severity: Severity
     module: str
     object_type: str
@@ -37,6 +41,8 @@ class Issue:
 
 
 class QAReport:
+    """Aggregates all verification issues into a structured report"""
+
     def __init__(self, job_name: str = "Unknown Job", run_timestamp: datetime = None):
         self.job_name = job_name
         self.run_timestamp = run_timestamp or datetime.now()
@@ -44,7 +50,7 @@ class QAReport:
 
     @property
     def issues(self) -> List[Issue]:
-        return self._issues
+        return self._issues.copy()
 
     @property
     def total_issues(self) -> int:
@@ -64,6 +70,7 @@ class QAReport:
 
     @property
     def summary(self) -> Dict[str, Any]:
+        """Get summary statistics by module"""
         modules = {}
         for issue in self._issues:
             if issue.module not in modules:
@@ -84,6 +91,7 @@ class QAReport:
         }
 
     def add_issue(self, issue: Issue) -> None:
+        """Add an issue to the report"""
         self._issues.append(issue)
 
     def add_error(
@@ -94,6 +102,7 @@ class QAReport:
         description: str,
         detail: Dict = None,
     ) -> None:
+        """Convenience method to add an error"""
         self.add_issue(
             Issue(
                 severity=Severity.ERROR,
@@ -113,6 +122,7 @@ class QAReport:
         description: str,
         detail: Dict = None,
     ) -> None:
+        """Convenience method to add a warning"""
         self.add_issue(
             Issue(
                 severity=Severity.WARNING,
@@ -124,13 +134,36 @@ class QAReport:
             )
         )
 
+    def add_info(
+        self,
+        module: str,
+        object_type: str,
+        location: str,
+        description: str,
+        detail: Dict = None,
+    ) -> None:
+        """Convenience method to add info"""
+        self.add_issue(
+            Issue(
+                severity=Severity.INFO,
+                module=module,
+                object_type=object_type,
+                location=location,
+                description=description,
+                detail=detail or {},
+            )
+        )
+
     def get_issues_by_module(self, module: str) -> List[Issue]:
+        """Get all issues for a specific module"""
         return [i for i in self._issues if i.module == module]
 
     def get_issues_by_severity(self, severity: Severity) -> List[Issue]:
+        """Get all issues of a specific severity"""
         return [i for i in self._issues if i.severity == severity]
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert report to dictionary"""
         return {
             "job_name": self.job_name,
             "run_timestamp": self.run_timestamp.isoformat(),
@@ -139,10 +172,12 @@ class QAReport:
         }
 
     def to_json(self, path: str) -> None:
+        """Export report to JSON file"""
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
     def to_csv(self, path: str) -> None:
+        """Export report to CSV file"""
         import csv
 
         with open(path, "w", newline="", encoding="utf-8") as f:
@@ -170,15 +205,18 @@ class QAReport:
                 )
 
     def to_html(self, path: str) -> None:
+        """Export report to HTML file"""
         html = self._generate_html()
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
 
     def _generate_html(self) -> str:
+        """Generate HTML report content"""
         summary = self.summary
         timestamp = self.run_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
+        # Build module summary rows
         module_rows = ""
         for module, counts in summary["by_module"].items():
             module_rows += f"""
@@ -188,6 +226,7 @@ class QAReport:
                     <td class="warning-count">{counts["warnings"]}</td>
                 </tr>"""
 
+        # Build issue rows
         issue_rows = ""
         for issue in self._issues:
             severity_class = issue.severity.value.lower()
@@ -292,10 +331,6 @@ class QAReport:
         .issue-row.warning {{ background: #fffdf0; }}
         .no-issues {{ text-align: center; padding: 40px; color: #28a745; }}
         .footer {{ text-align: center; color: #666; margin-top: 20px; font-size: 0.9em; }}
-        @media (max-width: 768px) {{
-            .summary {{ grid-template-columns: repeat(2, 1fr); }}
-            table {{ font-size: 0.85em; }}
-        }}
     </style>
 </head>
 <body>
@@ -344,11 +379,11 @@ class QAReport:
         
         <div class="section">
             <h2>All Issues</h2>
-            {"<table><thead><tr><th>Severity</th><th>Module</th><th>Object</th><th>Location</th><th>Description</th><th>Details</th></tr></thead><tbody>" + issue_rows + "</tbody></table>" if self._issues else "<p class='no-issues'>No issues found!</p>"}
+            {f"<table><thead><tr><th>Severity</th><th>Module</th><th>Object</th><th>Location</th><th>Description</th><th>Details</th></tr></thead><tbody>{issue_rows}</tbody></table>" if self._issues else '<p class="no-issues">No issues found!</p>'}
         </div>
         
         <div class="footer">
-            Generated by QA/QC Verification Tool | {timestamp}
+            Generated by QA/QC Verification Tool v1.0.0-alpha | {timestamp}
         </div>
     </div>
 </body>

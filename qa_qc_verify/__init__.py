@@ -1,10 +1,11 @@
 """
 SDS/2 QA/QC Verification Tool
-Production-ready verification for steel detailing projects
+Author: John May
+Version: 1.0.0-alpha
 """
 
-__version__ = "1.0.0"
-__author__ = "AddonAxis / FabTrics"
+__version__ = "1.0.0-alpha"
+__author__ = "John May"
 
 from .run import run_verification
 from .report import QAReport, Issue, Severity

@@ -1,238 +1,351 @@
 """
-BOM Reconciliation Module - Compares Gather Sheet BOM vs Detail Sheet BOMs for exact matches
+BOM Reconciliation Module
+Compares Gather Sheet BOM against aggregate Detail Sheet BOMs
+Author: John May
+Version: 1.0.0-alpha
 """
-import time
-from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+import re
+from typing import List, Dict, Any, Optional,from collections import defaultdict
+from dataclasses import dataclass
 
 try:
     from DesignData.SDS2.Database import (
-        DataDirectory, Job, MemberHandle, MemberHandleList
-    )
+        Job, DrawingHandle, DrawingHandleList, TableWithDrawings
+ )
     from DesignData.SDS2.Detail import (
-        Drawing, DrawingList, DrawingStatus
-        BillOfMaterial
+        Drawing, DrawingList, DrawingStatus, BillOfMaterial, PiecemarkType
     )
-    from DesignData.SDS2.Database import TableWithDrawings
-    GatherSheet
-    DetailSheet
-            ErectionSheet = ErectionView
-            Submaterial
-        )
+    from DesignData.SDS2.Model import MemberBrief
+    API_AVAILABLE = True
+except ImportError:
+    API_AVAILABLE = False
 
-    from ..config import Config
+
+from ..config import Config
 from ..report import QAReport, Issue, Severity
-from ..utils.progress import ProgressTracker
+from ..utils import ProgressTracker
 
 
-    from ..utils.helpers import get_drawing_extents
+@dataclass
+class BOMLine:
+    """Represents a single BOM line"""
+    piecemark: str
+    minor_mark: str
+    description: str
+    grade: str
+    shape: str
+    size: str
+    length: float
+    unit_quantity: int
+    total_quantity: int
+    unit_weight: float
+    total_weight: float
+    is_hidden: bool
+    advance_mill: str
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'piecemark': self.piecemark,
+            'minor_mark': self.minor_mark,
+            'description': self.description,
+            'grade': self.grade,
+            'shape': self.shape,
+            'size': self.size,
+            'length': self.length,
+            'unit_quantity': self.unit_quantity,
+            'total_quantity': self.total_quantity,
+            'unit_weight': self.unit_weight,
+            'total_weight': self.total_weight,
+            'is_hidden': self.is_hidden,
+            'advance_mill': self.advance_mill
+        }
 
 
-    detail_bom_key = gather_sheet_bom, detail_piecemark, detail_sheet_name, aggregate_gather_bom_data
-    for detail_sheet_name in detail_sheet_names
-    detail_piecemarks_on_detail_sheets = set()
-    for detail_sheet_handle in detail_sheet_handles:
-        detail_drawing = Drawing.Get(detail_sheet_handle)
-        if not detail_drawing:
-            continue
-        detail_bom = detail_bom.Gather_bom()
-            detail_bom = detail_bom.Get_lines()
-        for line in lines:
-            if line.is_line_hidden:
+@dataclass
+class BOMSummary:
+    """BOM reconciliation summary"""
+    gather_sheet: str
+    detail_sheets: List[str]
+    gather_bom: Dict[str, List[BOMLine]] = field(default_factory=dict)
+    detail_biecemarks: Dict[str, List[BOMLine]] = field(default_factory=dict)
+    detail_only_piecemarks: Set[str] = field(default_factory=set)
+    total_quantities: Dict[str, int] = field(default_factory=dict)
+    material_types: Dict[str, int] = field(default_factory=dict)
+    shapes: Dict[str, int] = field(default_factory=dict)
+    grades: Dict[str, int] = field(default_factory=dict)
+    issues: List[Dict] = field(default_factory=list)
+    
+    def add_gather_line(self, line: BOMLine) -> None:
+        if line.piecemark not in self.gather_bom:
+            self.gather_bom[line.piecemark] = []
+        self.gather_bom[line.piecemark].append(line)
+    
+    def add_detail_line(self, sheet: str, piecemark: str, line: BOMLine) -> None:
+        if piecemark not in self.detail_piecemarks:
+            self.detail_piecemarks[piecemark] = []
+        self.detail_piecemarks[piecemark].append(line)
+    
+    def add_issue(self, issue: Dict) -> None:
+        self.issues.append(issue)
+    
+    def get_gather_summary(self) -> Dict[str, Any]:
+        return {
+            'gather_sheet': self.gather_sheet,
+            'detail_sheets': self.detail_sheets,
+            'total_gather_lines': sum(len(v) for v in self.gather_bom.values()),
+            'total_detail_lines': sum(len(v) for v in self.detail_piecemarks.values()),
+            'issues': self.issues
+        }
+
+
+def verify_bom_reconciliation(job: Job, report: QAReport, config: Config) -> QAReport:
+    """
+    Module 4: BOM Reconciliation
+    Compares Gather Sheet BOM against aggregate Detail Sheet BOMs
+    Verifies exact matches for:
+    - Quantities
+    - Material Types  
+    - Sizes
+    - Shapes
+    - Steel Grades
+    """
+    tracker = ProgressTracker(total_steps=4)
+    tracker.print_status("Starting BOM Reconciliation...")
+    
+    if not API_AVAILABLE:
+        report.add_error(
+            module="BOM",
+            object_type="System",
+            location="N/A",
+            description="SDS/2 API not available - cannot perform verification",
+            detail={}
+        )
+        return report
+    
+    # Get gather sheet handles
+    tracker.print_status("Reading gather sheets...")
+    gather_handles = job.GetDrawingHandles(TableWithDrawings.GatherSheet)
+    gather_sheets: Dict[str, BOMSummary] = {}
+    
+    for handle in gather_handles:
+        drawing = Drawing.Get(handle)
+        sheet_name = drawing.Name
+        bom = drawing.BillOfMaterial
+        
+        
+        if bom:
+            lines = bom.GetLines()
+            gather_bom_lines: List[BOMLine] = []
+            
+            for line in lines:
+                if line.IsLineHidden:
+                    continue
+                
+                bom_line = BOMLine(
+                    piecemark=line.Piecemark,
+                    minor_mark=line.MinorMark or "",
+                    description=line.Description or "",
+                    grade=str(line.Grade) or "",
+                    shape=str(line.Shape) if hasattr(line, 'Shape') else "",
+                    size=str(line.Shape.Size) if hasattr(line, 'Size') else "",
+                    length=float(line.Length) if line.Length else 0.0,
+                    unit_quantity=int(line.UnitQuantity) if line.UnitQuantity else 0,
+                    total_quantity=int(line.TotalQuantity) if line.TotalQuantity else 0,
+                    unit_weight=float(line.UnitWeight) if line.UnitWeight else 0.0,
+                    total_weight=float(line.TotalWeight) if line.TotalWeight else 0.0,
+                    is_hidden=line.IsLineHidden,
+                    advance_mill=line.AdvanceMill or ""
+                )
+                gather_bom_lines.append(bom_line)
+            
+            gather_sheets[sheet_name] = BOMSummary(
+                gather_sheet=sheet_name,
+                detail_sheets=[],
+                gather_bom=sheet_name: gather_bom_lines,
+            )
+            
+            for bom_line in gather_bom_lines:
+                gather_bom[bom_line.piecemark].append(bom_line)
+    
+    tracker.print_status(f"Found {len(gather_sheets)} gather sheets with {sum(len(v) for v in gather_bom.values())} BOM lines")
+    
+    # Get detail sheet handles
+    tracker.print_status("Reading detail sheets...")
+    detail_handles = job.GetDrawingHandles(TableWithDrawings.DetailSheet)
+    
+    for handle in detail_handles:
+        drawing = Drawing.Get(handle)
+        sheet_name = drawing.Name
+        bom = drawing.BillOfMaterial
+        
+        
+        if bom:
+            lines = bom.GetLines()
+            
+            for line in lines:
+                if line.IsLineHidden:
+                    continue
+                
+                bom_line = BOMLine(
+                    piecemark=line.Piecemark,
+                    minor_mark=line.MinorMark or "",
+                    description=line.Description or "",
+                    grade=str(line.Grade) or "",
+                    shape=str(line.Shape) if hasattr(line, 'Shape') else "",
+                    size=str(line.Shape.Size) if hasattr(line, 'Size') else "",
+                    length=float(line.Length) if line.Length else 0.0,
+                    unit_quantity=int(line.UnitQuantity) if line.UnitQuantity else 0,
+                    total_quantity=int(line.TotalQuantity) if line.TotalQuantity else 0,
+                    unit_weight=float(line.UnitWeight) if line.UnitWeight else 0.0,
+                    total_weight=float(line.TotalWeight) if line.TotalWeight else 0.0,
+                    is_hidden=line.IsLineHidden,
+                    advance_mill=line.AdvanceMill or ""
+                )
+                
+                # Add to detail sheet BOMs
+                if sheet_name not in gather_sheets:
+                    continue
+                
+                gather_sheets[sheet_name].add_detail_line(sheet_name, bom_line)
+    
+    tracker.print_status(f"Found {len(gather_sheets)} detail sheets with BOMs")
+    
+    # Reconcile BOMs
+    tracker.print_status("Reconciling BOM data...")
+    issues: List[Dict] = []
+    
+    for gather_name, gather_summary in gather_sheets.items():
+        for piecemark, gather_bom in gather_summary.gather_bom.items():
+            for detail_name in gather_summary.detail_sheets:
+                if piecemark in gather_summary.detail_piecemarks:
+                    detail_bom = gather_summary.detail_piecemarks[piecemark]
+                    
+                    # Find matching detail line
+                    for detail_line in detail_bom:
+                        if (detail_line.minor_mark == gather_bom.minor_mark and                            detail_line.minor_mark == gather_bom.minor_mark:
+                            
+                            # Compare quantities
+                            if detail_line.total_quantity != gather_bom.total_quantity:
+                                issues.append({
+                                    'type': 'quantity_mismatch',
+                                    'piecemark': piecemark,
+                                    'minor_mark': detail_line.minor_mark,
+                                    'gather_sheet': gather_name,
+                                    'detail_sheet': detail_name,
+                                    'gather_quantity': gather_bom.total_quantity,
+                                    'detail_quantity': detail_line.total_quantity
+                                })
+                            
+                            # Compare grades
+                            if detail_line.grade != gather_bom.grade:
+                                issues.append({
+                                    'type': 'grade_mismatch',
+                                    'piecemark': piecemark,
+                                    'minor_mark': detail_line.minor_mark,
+                                    'gather_sheet': gather_name,
+                                    'detail_sheet': detail_name,
+                                    'gather_grade': gather_bom.grade,
+                                    'detail_grade': detail_line.grade
+                                })
+                            
+                            # Compare shapes
+                            if detail_line.shape != gather_bom.shape:
+                                issues.append({
+                                    'type': 'shape_mismatch',
+                                    'piecemark': piecemark,
+                                    'minor_mark': detail_line.minor_mark,
+                                    'gather_sheet': gather_name,
+                                    'detail_sheet': detail_name,
+                                    'gather_shape': gather_bom.shape,
+                                    'detail_shape': detail_line.shape
+                                })
+                            
+                            # Mark as processed
+                            gather_bom.is_hidden = False
+                            detail_line.is_hidden = False
+        
+        # Check for orphaned materials
+        for gather_name, gather_summary in gather_sheets.items():
+            for piecemark, gather_bom in gather_summary.gather_bom.items():
+                if piecemark not in gather_summary.detail_piecemarks:
+                    issues.append({
+                        'type': 'orphaned_gather',
+                        'piecemark': piecemark,
+                        'minor_mark': gather_bom.minor_mark,
+                        'gather_sheet': gather_name,
+                        'detail_sheet': None,
+                        'gather_quantity': gather_bom.total_quantity,
+                        'detail_quantity': 0
+                    })
+        
+        for detail_name in gather_summary.detail_sheets:
+            if detail_name not in gather_summary.detail_sheets:
                 continue
             
-            lines_by_pmk.append((line.MinorMark or int(line.TotalQuantity),
-            lines_by_grade.append((line.Grade, line.Length, line.Advance_mill, line.advance_mill))
-            if any_mismatch:
-                report.add_error(
-                    module="BOM",
-                    object_type="Material",
-                    location=f"Gather sheet '{gsheet}' - Material '{line.MinorMark}'",
-                    description=f"Quantity mismatch: Gather={line.TotalQuantity} != Detail {line.TotalQuantity}",
-                    detail={
-                        "gather_sheet": gsheet,
-                        "gather_line": gather_line,
-                        "material": line.Description,
-                        "size": f"{line.Size}",
-                        "shape": str(line.Shape) if line.Shape else None,
-                        "grade": line.Grade,
-                        "length": line.Length,
-                        "advance_mill": line.advance_mill,
-                        "is_hidden": line.is_lineHidden
-                    }
-                else:
-                    report.add_warning(
-                        module="BOM",
-                        object_type="Material",
-                        location=f"Gather sheet '{gsheet}' - Material '{line.MinorMark}'",
-                        description=f"Material on gather but has no matching detail",
-                        detail={
-                            "gather_sheet": gsheet,
-                            "gather_line": gather_line
-                        "material": line.Description,
-                        "size": f"{line.Size}",
-                        "shape": str(line.Shape) if line.Shape else None,
-                        "grade": line.Grade,
-                        "length": line.Length
-                        "unit_quantity": line.UnitQuantity,
-                        "total_quantity": line.TotalQuantity
-                        "unit_weight": line.UnitWeight,
-                        "total_weight": line.TotalWeight
-                        "is_hidden": line.isLineHidden
-                    }
-                else:
-                    report.add_warning(
-                        module="BOM",
-                        object_type="Material",
-                        location=f"Gather sheet '{gsheet}' - Material '{line.MinorMark}'",
-                        description=f"Material found only on gather sheet but not on any detail sheet",
-                        detail={
-                            "gather_sheet": gsheet,
-                            "gather_line": gather_line
-                            "material": line.Description,
-                            "size": f"{line.Size}",
-                            "shape": str(line.Shape) if line.Shape else None,
-                            "grade": line.Grade,
-                            "length": line.Length,
-                            "unit_quantity": line.UnitQuantity,
-                            "total_quantity": line.TotalQuantity
-                            "gather_quantity": gather_qty.get(pmk),
-                            "total_detail_qty": total_detail_qty.get(pmk),
-                            "unit_qty": line.UnitQuantity
-                            "total_qty": line.TotalQuantity
-                            "total_weight": line.TotalWeight,
-                            "unit_weight": line.UnitWeight
-                            "advance_mill": line.advanceMill
-                        }
-                    else:
-                        detail_qty_by_pmk[detail_pmk] = {
-                            'gather_qty': gather_qty,
-                            'detail_qty': detail_qty
+            detail_bom = gather_summary.detail_piecemarks[piecemark]
+            for piecemark, detail_lines in detail_bom.items():
+                for detail_line in detail_lines:
+                    if piecemark not in gather_summary.gather_bom:
+                        issues.append({
+                            'type': 'orphaned_detail',
+                            'piecemark': piecemark,
+                            'minor_mark': detail_line.minor_mark,
+                            'gather_sheet': None,
+                            'detail_sheet': detail_name,
+                            'gather_quantity': 0,
+                            'detail_quantity': detail_line.total_quantity
                         })
-                else:
-                    missing_on_detail.append({
-                        'gather_sheet': gsheet,
-                        'gather_line': gather_line,
-                        'piecemark': pmk,
-                        'minor_mark': minor_mark,
-                        'size': size.get(size, "size mismatch")
-                        'shape': f"{line.Shape}" if line.Shape else "Not found",
-                        'grade': f"{line.Grade}" if line.Grade else None,
-                        'length': numbers.get(f"{line.Length}", f" vs {d.Length}", tolerance=0.001),
-                        mismatches.append({
-                            'piecemark': pmk,
-                            'minor_mark': minor_mark,
-                            'size': f"{line.Size}",
-                            'shape': str(line.Shape),
-                            'grade': f"{line.Grade} (line.Grade)" else "None"
-                        'length': f"{line.Length} {d_length} mm vs {d.length_mm:.2f}",
-                        report.add_error(
-                            module="BOM",
-                            object_type="Material",
-                            location=f"Gather sheet '{gsheet}' - Material '{line.MinorMark}",
-                            description=f"Material '{line.MinorMark}' size mismatch: {line.Size}mm vs {detail_line.Length:.1f} mm",
-                            detail={
-                                "gather_sheet": gsheet,
-                                "gather_line": gather_line
-                                "detail_line": gather_line
-                            "detail_qty": detail_qty
-                            "detail_qty": detail_qty
-                            "detail_length_mm": line.Length,
-                            "detail_weight_kg": detail_weight
-                            "unit_weight_kg": detail_weight
-                            "total_weight_kg": detail_weight
-                            "is_hidden": line.isLineHidden
-                        })
-                else:
-                    report.add_warning(
-                        module="BOM",
-                        object_type="Material",
-                        location=f"Gather sheet '{gsheet}' - Material '{line.MinorMark}",
-                        description=f"Material found on gather sheet but not on any detail sheet",
-                        detail={
-                            "gather_sheet": gsheet,
-                            "gather_line": gather_line
-                        }
-                    )
-                
-                if not detail_sheet_handles:
-                    continue
-            
-            for detail_drawing in Drawing.Find(PiecemarkType.Major, dpmk):
-                if not detail_drawing:
-                    report.add_warning(
-                        module="BOM",
-                        object_type="Detail",
-                        location=f"Detail '{pmg}'",
-                        description=f"Detail exists but has no corresponding drawing",
-                        detail={"piecemark": pmk}
-                    )
-            
-            try:
-                detail_bom = detail_bom.Get_lines()
-                for line in lines:
-                    if line.is_line_hidden:
-                        continue
-                    
-            try:
-                detail_sheet = Drawing.Find(TableWithDrawings.DetailSheet, sheet_name)
-                for ds_list in ds_list:
-                    sheets_referenced = set(sheet_names)
-                    detail_placed_sheets.add(sheet_name)
-                    if sheet_name not in sheets_referenced:
-                        report.add_warning(
-                            module="BOM",
-                            object_type="Detail",
-                            location=f"Detail '{pmk}'",
-                            description=f"Detail exists but is not placed on any erection sheet. "
-                                        f"  Member #{mb.Number}, piecemark={pmk}, sheet on erection sheet '{sheet_name if sheet.Name}"
-                                        f"  member #{mb.Number} ({mb.MemberType})"
-                                        f"  shape: {str(mb.Shape)} ({mb.Grade})",
-                                        f"  member numbers: {[m.Number for m in ds_list if m.Number in member_numbers]}
-                                    )
-                                    sheet_handle = ds_list[ separated_str
-                    
-                    for s in sorted(sheet_issues_by member number:
-                        orphaned.append({
-                            'piecemark': pmg,
-                            'minor_mark': minor_mark,
-                            'detail_handles': detail_handles,
-                            'size': len(detail_handles),
-                            'member_numbers': member_numbers,
-                            'sheet': sheet_name
-                        })
-                    else:
-                        orphaned_details.append({
-                            'piecemark': pmg,
-                            'minor_mark': minor_mark,
-                            'size': str(line.Size),
-                            'shape': str(line.Shape) if line.Shape else None,
-                            'grade': str(line.Grade) if line.Grade else None
-                            'length': line.Length
-                            'member_numbers': member_numbers,
-                            'sheet': sheet
-                        })
-                    
-                    if not sheet_handle:
-                        report.add_warning(
-                            module="BOM",
-                            object_type="Detail",
-                            location=f"Detail '{pmg}'",
-                            description=f"Detail '{pmg}' has no associated drawing - check erection plan callouts",
-                            "detail": {
-                                "piecemark": pmk,
-                                "minor_mark": minor_mark,
-                                "size": str(line.Size),
-                                "shape": str(line.Shape),
-                                "grade": str(line.Grade)
-                            }
-                        }
-                    
-            if any_detail_drawing:
-                try:
-                    detail_drawing = Drawing.Get(detail_sheet_handle)
-                except:
-                    pass
-            
-    finally:
-        return report, config)
+    
+    # Add issues to report
+    for issue in issues:
+        if issue['type'] == 'quantity_mismatch':
+            report.add_error(
+                module="BOM",
+                object_type="Material",
+                location=f"Gather Sheet '{issue['gather_sheet']}' - Material '{issue['minor_mark']}'",
+                description=f"Quantity mismatch: Gather={issue['gather_quantity']}, Detail={issue['detail_quantity']}",
+                detail=issue
+            )
+        elif issue['type'] == 'grade_mismatch':
+            report.add_error(
+                module="BOM",
+                object_type="Material",
+                location=f"Gather Sheet '{issue['gather_sheet']}' - Material '{issue['minor_mark']}'",
+                description=f"Grade mismatch: Gather={issue['gather_grade']}, Detail={issue['detail_grade']}",
+                detail=issue
+            )
+        elif issue['type'] == 'shape_mismatch':
+            report.add_error(
+                module="BOM",
+                object_type="Material",
+                location=f"Gather Sheet '{issue['gather_sheet']}' - Material '{issue['minor_mark']}'",
+                description=f"Shape mismatch: Gather={issue['gather_shape']}, Detail={issue['detail_shape']}",
+                detail=issue
+            )
+        elif issue['type'] == 'orphaned_gather':
+            report.add_warning(
+                module="BOM",
+                object_type="Material",
+                location=f"Gather Sheet '{issue['gather_sheet']}' - Material '{issue['minor_mark']}'",
+                description=f"Material on gather sheet but not found on any detail sheet",
+                detail=issue
+            )
+        elif issue['type'] == 'orphaned_detail':
+            report.add_warning(
+                module="BOM",
+                object_type="Material",
+                location=f"Detail Sheet '{issue['detail_sheet']}' - Material '{issue['minor_mark']}'",
+                description=f"Material on detail sheet but not found on gather sheet",
+                detail=issue
+            )
+    
+    # Summary
+    tracker.print_status(
+        f"Completed: {len(issues)} BOM issues found"
+        print(f"  Quantity mismatches: {sum(1 for i in issues if i['type'] == 'quantity_mismatch')}")
+        print(f"  Grade mismatches: {sum(1 for i in issues if i['type'] == 'grade_mismatch')}")
+        print(f"  Shape mismatches: {sum(1 for i in issues if i['type'] == 'shape_mismatch')}")
+        print(f"  Orphaned from gather: {sum(1 for i in issues if i['type'] == 'orphaned_gather')}")
+        print(f"  Orphaned from detail: {sum(1 for i in issues if i['type'] == 'orphaned_detail')}")
+    
+    return report
