@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node modules (for sds2_scraper)
+node_modules/
+
+# Cache files
+*.pkl
+.cache/
+
+# Output files
+*.pdf
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Steel Detailer AI subproject (separate repo)
+steel-detailer-ai/
+
+# SDS2 scraper
+sds2_scraper/node_modules/
+sds2_scraper/.doc_index_cache.pkl
+
+# Sensitive files
+.env
+*.env
+credentials.json
+config.local.json
