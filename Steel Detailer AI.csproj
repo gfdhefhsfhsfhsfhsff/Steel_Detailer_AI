@@ -1,8 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <RootNamespace>Steel_Detailer_AI</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -14,4 +15,32 @@
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="DesignData.SDS2.Database">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Database.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Model">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Model.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Detail">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Detail.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Setup">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Setup.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Primitives">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Exceptions">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Exceptions.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="EPPlus" Version="4.5.3.3" />
+  </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="Program.cs" />
+      <Compile Include="sds tooling\**\*.cs" Exclude="sds tooling\**\obj\**\*;sds tooling\**\bin\**\*;sds tooling\Checker1\Program.cs;sds tooling\Checker2\Program.cs" />
+    </ItemGroup>
 </Project>

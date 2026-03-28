@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <OutputPath>bin\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="DesignData.SDS2.Database">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Database.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Model">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Model.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Detail">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Detail.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Setup">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Setup.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Primitives">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignData.SDS2.Exceptions">
+      <HintPath>C:\Program Files\SDS2_2026\2026\bin\DesignData.SDS2.Exceptions.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="EPPlus" Version="4.5.3.3" />
+  </ItemGroup>
+</Project>
