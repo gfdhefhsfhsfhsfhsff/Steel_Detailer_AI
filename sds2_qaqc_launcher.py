@@ -245,7 +245,7 @@ class QAQCPlugin:
         tk.Label(
             bf, text="Projects root:", font=("Segoe UI", 9), fg="#bdc3c7", bg="#2c3e50"
         ).pack(side="left")
-        self._root_var = tk.StringVar(value=r"F:\WD Projects (total company)")
+        self._root_var = tk.StringVar(value=os.getcwd())
         tk.Entry(bf, textvariable=self._root_var, width=40, font=("Consolas", 9)).pack(
             side="left", padx=4
         )
@@ -516,9 +516,8 @@ class QAQCPlugin:
 
 def _cli():
     if len(sys.argv) > 1 and sys.argv[1].lower().strip("-/") == "scan":
-        root = sys.argv[2] if len(sys.argv) > 2 else r"F:\WD Projects (total company)"
-        out = sys.argv[3] if len(sys.argv) > 3 else "./qa_output"
-        sys.argv = [sys.argv[0]]
+        root = sys.argv[2] if len(sys.argv) > 2 else "./qa_output"
+        out = sys.argv[0]
         from qa_qc_verify.scan_runner import main
 
         main()

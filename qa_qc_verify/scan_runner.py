@@ -845,7 +845,7 @@ def main() -> None:
     parser.add_argument(
         "projects_root",
         nargs="?",
-        default=r"F:\WD Projects (total company)",
+        default=".",
         help="Root directory containing all project folders",
     )
     parser.add_argument(
