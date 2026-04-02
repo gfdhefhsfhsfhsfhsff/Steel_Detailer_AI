@@ -23,7 +23,7 @@ namespace SDS2Workflow
                 Console.WriteLine($"  [{i + 1}] {repositories[i].Name}");
 
             Console.Write("\n  Select repository number: ");
-            if (!int.TryParse(Console.ReadLine().Trim(), out int repoIndex) || repoIndex < 1 || repoIndex > repositories.Count) return;
+            if (!int.TryParse((Console.ReadLine() ?? string.Empty).Trim(), out int repoIndex) || repoIndex < 1 || repoIndex > repositories.Count) return;
             var selectedRepo = repositories[repoIndex - 1];
 
             var jobIds = selectedRepo.JobIdentifiers;
@@ -32,11 +32,11 @@ namespace SDS2Workflow
                 Console.WriteLine($"  [{i + 1}] {jobIds[i].Name}");
 
             Console.Write("\n  Select job number: ");
-            if (!int.TryParse(Console.ReadLine().Trim(), out int jobIndex) || jobIndex < 1 || jobIndex > jobIds.Count) return;
+            if (!int.TryParse((Console.ReadLine() ?? string.Empty).Trim(), out int jobIndex) || jobIndex < 1 || jobIndex > jobIds.Count) return;
             var selectedJobId = jobIds[jobIndex - 1];
 
             Console.Write("\n  Enter Sequence Name to Check (e.g. '1', '2A'): ");
-            string targetSequenceName = Console.ReadLine().Trim();
+            string targetSequenceName = (Console.ReadLine() ?? string.Empty).Trim();
 
             VerifyMainMemberDetails(selectedRepo.Name, selectedJobId.Name, targetSequenceName);
             VerifyGatherSheets(selectedRepo.Name, selectedJobId.Name, targetSequenceName);
@@ -198,6 +198,11 @@ namespace SDS2Workflow
             }
 
             var job = Job.FindJob(jobId);
+            if (job == null)
+            {
+                Console.WriteLine($"Could not find job '{jobName}'.");
+                return null;
+            }
             job.Open();
             return job;
         }

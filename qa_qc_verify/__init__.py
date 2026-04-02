@@ -7,8 +7,21 @@ Version: 1.0.0-alpha
 __version__ = "1.0.0-alpha"
 __author__ = "John May"
 
-from .run import run_verification
-from .report import QAReport, Issue, Severity
-from .config import Config
+try:
+    from .run import run_verification
+except Exception:
+    run_verification = None
+
+try:
+    from .report import QAReport, Issue, Severity
+except Exception:
+    QAReport = None
+    Issue = None
+    Severity = None
+
+try:
+    from .config import Config
+except Exception:
+    Config = None
 
 __all__ = ["run_verification", "QAReport", "Issue", "Severity", "Config"]

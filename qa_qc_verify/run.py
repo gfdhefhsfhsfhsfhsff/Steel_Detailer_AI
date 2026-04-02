@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 """
-Main entry point for Runs all verification modules
+Main entry point for QA/QC verification.
+Works on whatever job is currently open in SDS/2.
+No config file required — auto-detects job from the active SDS/2 session.
 Author: John May
-Version: 1.0.0-alpha
+Version: 1.1.0
 """
 
+import os
 import sys
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from .config import Config
 from .report import QAReport
 from .checks.mark_verification import verify_marks
 from .checks.sheet_boundary import verify_sheet_boundaries
@@ -22,9 +26,6 @@ try:
     from DesignData.SDS2.Database import (
         Job,
         DataDirectory,
-        MemberHandleList,
-        DrawingHandleList,
-        TableWithDrawings,
         ReadOnlyTransaction,
     )
     from DesignData.SDS2.Detail import Drawing, DrawingList
@@ -34,145 +35,168 @@ except ImportError:
     API_AVAILABLE = False
 
 
-def run_verification(config_path: Optional[str] = None) -> QAReport:
+def _auto_open_job() -> tuple:
+    try:
+        DataDirectory.Open(DataDirectory.Default)
+    except Exception as e:
+        return None, str(e)
+
+    try:
+        job_id = Job.Default
+        job = Job.FindJob(job_id)
+        if job:
+            return job, None
+    except Exception:
+        pass
+
+    return None, "No default job found"
+
+
+def run_verification(
+    config_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    checks: Optional[List[str]] = None,
+    page_margin_inches: float = 0.5,
+    system_patterns: Optional[List[str]] = None,
+) -> QAReport:
     """
-    Main entry point for the QA/QC verification tool.
-    Orchestrates all verification checks and generates a comprehensive discrepancy report.
+    Run QA/QC verification on the currently open SDS/2 job.
+
+    No config file or hardcoded paths needed. Auto-detects the active job
+    from the SDS/2 session and evaluates whatever model is loaded.
 
     Args:
-        config_path: Path to configuration JSON file (default: 'qa_config.json')
+        config_path: Optional path to config JSON (overrides auto-detect)
+        output_dir: Where to write reports (default: ./qa_output)
+        checks: List of check names to run. Default: all.
+                     Options: 'marks', 'sheets', 'erection', 'bom'
+        page_margin_inches: Sheet margin for boundary check (default: 0.5)
+        system_patterns: Regex patterns for system mark detection
     """
     start_time = time.time()
 
-    config = Config(config_path)
+    if output_dir is None:
+        output_dir = os.path.join(os.getcwd(), "qa_output")
+    os.makedirs(output_dir, exist_ok=True)
 
-    if config.fabricator_id:
-        db_connected = config.connect_db()
-        if not db_connected:
-            print_error("DB_001")
+    if checks is None:
+        checks = ["marks", "sheets", "erection", "bom"]
 
-    report = QAReport(job_name=config.job_name, run_timestamp=datetime.now())
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    html_path = os.path.join(output_dir, f"qaqc_{ts}.html")
+    json_path = os.path.join(output_dir, f"qaqc_{ts}.json")
+    csv_path = os.path.join(output_dir, f"qaqc_{ts}.csv")
 
     if not API_AVAILABLE:
-        print_error("API_001", "DesignData.SDS2 modules not found")
+        report = QAReport(job_name="Unknown", run_timestamp=datetime.now())
         report.add_error(
             module="Core",
             object_type="System",
             location="N/A",
-            description="SDS/2 API not available - cannot perform verification",
-            detail={"hint": "Run this script from within SDS/2"},
+            description="SDS/2 API not available. This tool must run inside SDS/2.",
+            detail={"hint": "Launch via Run Script or a toolbar button inside SDS/2"},
         )
         return report
 
-    if not config.validate_paths():
-        print_error("CFG_003", f"data_directory: {config.data_directory}")
+    job, job_error = _auto_open_job()
+    if job_error:
+        report = QAReport(job_name="Unknown", run_timestamp=datetime.now())
         report.add_error(
             module="Core",
-            object_type="Config",
+            object_type="Job",
             location="N/A",
-            description="Configuration paths are invalid",
-            detail={"data_directory": config.data_directory},
+            description=f"Could not open job: {job_error}",
+            detail={},
         )
+        return report
 
-    tracker = ProgressTracker(total_steps=5)
+    job_name = str(job) if job else "Unknown"
+    report = QAReport(job_name=job_name, run_timestamp=datetime.now())
 
-    try:
-        print(f"Opening job: {config.job_name}")
+    from .config import Config
 
-        job = Job.Open(config.job_name)
-        if not job:
-            print_error("API_002", f"job_name: {config.job_name}")
-            report.add_error(
-                module="Core",
-                object_type="Job",
-                location="N/A",
-                description=f"Could not open job: {config.job_name}",
-                detail={"job_name": config.job_name},
-            )
-            return report
+    config = Config.from_dict(
+        {
+            "job_name": job_name,
+            "output_path": html_path,
+            "page_margin_inches": page_margin_inches,
+        }
+    )
+    if system_patterns:
+        config._raw_config["system_patterns"] = system_patterns
 
-        member_handles = job.Members
-        total_members = len(member_handles)
+    if config_path and os.path.exists(config_path):
+        try:
+            config = Config(config_path)
+        except Exception:
+            pass
 
-        if total_members == 0:
-            print_error("API_003")
-            report.add_warning(
-                module="Core",
-                object_type="Job",
-                location="N/A",
-                description="Job has no members to verify",
-                detail={"job_name": config.job_name},
-            )
-            return report
+    member_handles = job.Members
+    total_members = len(member_handles)
 
-        tracker = ProgressTracker(total_steps=total_members)
-        print(f"Found {total_members} members to process")
+    if total_members == 0:
+        report.add_warning(
+            module="Core",
+            object_type="Job",
+            location="N/A",
+            description="Job has no members to verify",
+            detail={"job_name": job_name},
+        )
+        return report
 
-        # Phase 1: Mark Verification
-        print("\n=== Phase 1: Mark Verification ===")
-        tracker.start_phase("Mark Verification")
+    print(f"QA/QC Verification: {job_name}")
+    print(f"  Members: {total_members}")
+    print(f"  Checks: {', '.join(checks)}")
+    print()
+
+    tracker = ProgressTracker(total_steps=total_members)
+
+    if "marks" in checks:
+        print("Phase 1: Mark Verification")
         report = verify_marks(job, report, config)
         print(f"  {report.error_count} errors, {report.warning_count} warnings")
 
-        # Phase 2: Sheet Boundary Check
-        print("\n=== Phase 2: Sheet Boundary Check ===")
-        tracker.start_phase("Sheet Boundary")
+    if "sheets" in checks:
+        print("Phase 2: Sheet Boundary Check")
         report = verify_sheet_boundaries(job, report, config)
         print(f"  {report.error_count} errors, {report.warning_count} warnings")
 
-        # Phase 3: Erection Plan Continuity
-        print("\n=== Phase 3: Erection Plan Continuity ===")
-        tracker.start_phase("Erection Plan Continuity")
+    if "erection" in checks:
+        print("Phase 3: Erection Plan Continuity")
         report = verify_erection_continuity(job, report, config)
         print(f"  {report.error_count} errors, {report.warning_count} warnings")
 
-        # Phase 4: BOM Reconciliation
-        print("\n=== Phase 4: BOM Reconciliation ===")
-        tracker.start_phase("BOM Reconciliation")
+    if "bom" in checks:
+        print("Phase 4: BOM Reconciliation")
         report = verify_bom_reconciliation(job, report, config)
         print(f"  {report.error_count} errors, {report.warning_count} warnings")
 
-        # Phase 5: Generate Report
-        print("\n=== Phase 5: Generate Report ===")
-        tracker.print_status("Generating reports...")
-
+    print("Generating reports...")
+    try:
+        report.to_html(html_path)
+        report.to_json(json_path)
         try:
-            report.to_html(config.output_path)
-            report.to_json(config.output_path.replace(".html", ".json"))
-            report.to_csv(config.output_path.replace(".html", ".csv"))
-        except OSError as e:
-            print_error("RPT_001", str(e))
-
-        elapsed = time.time() - start_time
-
-        print(f"\n{'=' * 60}")
-        print(f"Report saved to: {config.output_path}")
-        print(f"  JSON: {config.output_path.replace('.html', '.json')}")
-        print(f"  CSV:  {config.output_path.replace('.html', '.csv')}")
-        print(f"\n{'=' * 60}")
-        print(f"TOTAL Issues: {report.summary['total_issues']}")
-        print(f"  Errors:   {report.error_count}")
-        print(f"  Warnings: {report.warning_count}")
-        print(f"  Duration: {tracker.format_time(elapsed)}s")
-
-        import webbrowser
-
-        webbrowser.open(f"file://{config.output_path}")
-
+            report.to_csv(csv_path)
+        except Exception:
+            pass
     except Exception as e:
-        print_error("RPT_003", str(e))
-        report.add_error(
-            module="Core",
-            object_type="System",
-            location="Report Generation",
-            description=str(e),
-            detail={"error": str(e)},
-        )
+        print(f"Report generation error: {e}")
 
-    config.disconnect_db()
+    elapsed = time.time() - start_time
+    summary = report.summary
+    print()
+    print(f"{'=' * 50}")
+    print(f"Job: {job_name}")
+    print(f"Members checked: {total_members}")
+    print(f"Total issues: {summary['total_issues']}")
+    print(f"  Errors:   {report.error_count}")
+    print(f"  Warnings: {report.warning_count}")
+    print(f"Duration: {tracker.format_time(elapsed)}")
+    print(f"Report: {html_path}")
+    print(f"{'=' * 50}")
+
     return report
 
 
 if __name__ == "__main__":
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "qa_config.json"
-    run_verification(config_path)
+    run_verification()

@@ -5,6 +5,8 @@ Author: John May
 Version: 1.0.0-alpha
 """
 
+from __future__ import annotations
+
 import re
 from typing import List, Set, Dict, Any, Optional
 from dataclasses import dataclass, field

@@ -30,10 +30,10 @@ namespace SDS2Workflow
         private class Issue
         {
             public int MemberNumber { get; set; }
-            public string Piecemark { get; set; }
-            public string IssueType { get; set; }
-            public string Sequence { get; set; }
-            public string Details { get; set; }
+            public string Piecemark { get; set; } = null!;
+            public string IssueType { get; set; } = null!;
+            public string Sequence { get; set; } = null!;
+            public string Details { get; set; } = null!;
         }
 
         [STAThread]

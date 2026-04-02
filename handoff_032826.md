@@ -37,15 +37,15 @@
 1. **CS8602 Null Reference Warnings**:
     - `VerifyBOM.cs` has 4 instances of potentially dereferencing null objects (e.g., missing members on gather sheets).
     - `Checker1` and `Checker2` have multiple `CS8618` warnings for non-nullable properties (PieceMark, Sequence, Details) exiting constructors uninitialized.
-2. **Hardcoded Testing Paths**:
-    - `BulkUpdaterLauncher.py` currently utilizes `subprocess.run(["dotnet", "run", "--project", ...])` pointing directly to `d:\Steel_Detailer_AI\Steel Detailer AI.csproj`. For production delivery to other detailers, this Python script must be modified to call the compiled executable (`Steel Detailer AI.exe`) via relative paths. 
+2. ~~**Hardcoded Testing Paths**~~ **FIXED (03/30/2026)**:
+    - `BulkUpdaterLauncher.py` now uses `os.path.dirname(os.path.abspath(__file__))` to compute the repo root dynamically, resolving the `.csproj` path and `cwd` relative to the script's own location. 
 3. **SDS/2 API Python Dependency**:
     - Relying on SDS/2's local Python interpreter requires ensuring future versions of SDS/2 (e.g., v2027) maintain standard `sds2` module bindings, specifically `selection.MemberSelection()`.
 
 ---
 
 ## 📘 Agent Handoff Context & Technical Notes
-- **Workspace Location**: `d:\Steel_Detailer_AI`
+- **Workspace Location**: Portable — all scripts use relative paths from the repo root
 - **SDS/2 Dependencies**: The project requires `C:\Program Files\SDS2_2026\2026\bin\` to compile. Standard `DataDirectory.Open(DataDirectory.Default)` is used.
 - **Crucial Rule on SDS2 .NET Locking**: Never bypass `ILockHandler`. Always instantiate `new Transaction(job, new ImmediateLockHandler())`, execute `.Add(handle)`, verify `.Lock()`, alter properties, and call `.Commit()`. The `.NET` API will crash or corrupt data if properties are changed outside an active lock.
 - **Reference Docs**: The user has successfully scraped `.md` API documentation locally. Utilize `grep_search` heavily on `d:\Steel_Detailer_AI\sds tooling\output\2026\API\` to discover properties and handle constraints (e.g., `CustomPropertyMapHandle`).
