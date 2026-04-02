@@ -65,6 +65,10 @@ sds2_scraper/.doc_index_cache.pkl
 qa_output/
 extracted_data/
 
+# Build artifacts (contain user-specific paths)
+**/obj/
+**/bin/
+
 # Template revision scripts
 revise_templates.py
 

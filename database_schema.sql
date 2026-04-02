@@ -224,7 +224,7 @@ VALUES (
 );
 
 --------------------------------------------------------------------------------
--- Sample fabricator: Steel Fabricators Inc.
+-- Sample fabricator
 --------------------------------------------------------------------------------
 INSERT INTO fabricator_standards
     (fabricator_id, fabricator_name, major_prefixes, minor_prefixes, system_patterns, page_margin_inches)
