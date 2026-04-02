@@ -28,6 +28,7 @@ from .cross_reference import (
     CrossReferenceEngine,
     aggregate_results,
     CrossReferenceResult,
+    CrossReleaseRef,
     VerificationIssue,
 )
 from .statistics import (
@@ -100,7 +101,7 @@ def _focus_filter(catalogs: List[ProjectCatalog], focus: str) -> List[ProjectCat
 
 def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> dict:
     start = time.time()
-    progress = ScanProgress(total_phases=6)
+    progress = ScanProgress(total_phases=7)
     errors: List[str] = []
 
     if not os.path.isdir(projects_root):
@@ -205,7 +206,33 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
     aggregated = aggregate_results(xref_results) if xref_results else {}
     progress.end_phase(f"{len(xref_results)} releases verified")
 
-    # ── Phase 5: Detect anomalies ─────────────────────────────────
+    # ── Phase 5: Cross-release reference detection ──────────────────
+    progress.start_phase("Detecting cross-release references")
+    cross_release_refs: List[CrossReleaseRef] = []
+    if len(release_map) > 1:
+        release_data: Dict[str, Tuple[KISSFile, ReleasePackage]] = {}
+        for key, release in release_map.items():
+            if key in kiss_files:
+                release_data[key] = (kiss_files[key], release)
+        try:
+            cross_release_refs = engine.detect_cross_release_references(release_data)
+        except Exception as e:
+            errors.append(f"Cross-release detection failed: {e}")
+
+    cross_release_serialized = [
+        {
+            "source_project": r.source_project,
+            "source_release": r.source_release,
+            "source_mark": r.source_mark,
+            "target_project": r.target_project,
+            "target_release": r.target_release,
+            "target_assembly": r.target_assembly,
+        }
+        for r in cross_release_refs
+    ]
+    progress.end_phase(f"{len(cross_release_refs)} cross-release references found")
+
+    # ── Phase 6: Detect anomalies ─────────────────────────────────
     progress.start_phase("Detecting anomalies across portfolio")
     anomalies: List[AnomalyReport] = []
     if baseline and all_metrics:
@@ -216,7 +243,7 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
 
     progress.end_phase(f"{len(anomalies)} anomalies detected")
 
-    # ── Phase 6: Generate reports ─────────────────────────────────
+    # ── Phase 7: Generate reports ─────────────────────────────────
     progress.start_phase("Generating reports")
     elapsed = time.time() - start
 
@@ -226,9 +253,12 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
     all_issues: List[Dict[str, Any]] = []
     for r in xref_results:
         for issue in r.issues or []:
+            sev = issue.severity
+            if hasattr(sev, "value"):
+                sev = sev.value
             all_issues.append(
                 {
-                    "severity": getattr(issue, "severity", "unknown"),
+                    "severity": str(sev) if sev is not None else "unknown",
                     "check_type": getattr(issue, "check_type", "unknown"),
                     "project": getattr(issue, "project", ""),
                     "release": getattr(issue, "release", ""),
@@ -250,7 +280,7 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
         },
         "releases": {
             "total": scan_stats.get("total_releases", 0),
-            "with_kiss": scan_stats.get("releases_with_kiss", 0),
+            "with_kiss": scan_stats.get("total_kiss_files", 0),
             "parsed_successfully": len(kiss_files),
             "parse_errors": parse_errors_count,
             "verified": len(xref_results),
@@ -269,6 +299,10 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
         "anomalies": {
             "total": len(anomalies),
             "items": [_serialize_anomaly(a) for a in anomalies],
+        },
+        "cross_release": {
+            "total": len(cross_release_refs),
+            "items": cross_release_serialized,
         },
         "issues": all_issues,
         "errors": errors,
@@ -299,6 +333,7 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
     print(f"  Releases:     {scan_stats.get('total_releases', 0)}")
     print(f"  KISS parsed:  {len(kiss_files)}")
     print(f"  Issues:       {len(all_issues)}")
+    print(f"  X-Release:    {len(cross_release_refs)}")
     print(f"  Anomalies:    {len(anomalies)}")
     print(f"  Errors:       {len(errors)}")
 
@@ -329,6 +364,9 @@ def _serialize_baseline(baseline: PortfolioBaseline) -> Dict[str, Any]:
         "total_releases",
         "stair_project_count",
         "rail_project_count",
+        "mean_assemblies",
+        "mean_pieces",
+        "mean_minor_marks",
     ):
         val = getattr(baseline, attr, None)
         if val is not None:
@@ -340,6 +378,7 @@ def _serialize_anomaly(anomaly: AnomalyReport) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for attr in (
         "project_name",
+        "release_name",
         "metric_name",
         "actual_value",
         "expected_range",
@@ -348,6 +387,8 @@ def _serialize_anomaly(anomaly: AnomalyReport) -> Dict[str, Any]:
         "is_anomaly",
     ):
         val = getattr(anomaly, attr, None)
+        if isinstance(val, tuple):
+            val = list(val)
         result[attr] = val
     return result
 
@@ -392,6 +433,7 @@ def _build_html(results: dict) -> str:
     releases = results.get("releases", {})
     xref = results.get("cross_reference", {})
     anomaly_data = results.get("anomalies", {})
+    cross_release_data = results.get("cross_release", {})
     issues = results.get("issues", [])
     errors = results.get("errors", [])
     baseline_data = results.get("baseline")
@@ -471,6 +513,18 @@ def _build_html(results: dict) -> str:
                     <td>{count}</td>
                 </tr>"""
 
+    cross_release_rows = ""
+    for cr in cross_release_data.get("items", [])[:500]:
+        cross_release_rows += f"""
+                <tr class="issue-row warning">
+                    <td class="location">{_esc(cr.get("source_project", ""))}</td>
+                    <td class="location">{_esc(cr.get("source_release", ""))}</td>
+                    <td class="location">{_esc(cr.get("source_mark", ""))}</td>
+                    <td class="location">{_esc(cr.get("target_project", ""))}</td>
+                    <td class="location">{_esc(cr.get("target_release", ""))}</td>
+                    <td class="location">{_esc(cr.get("target_assembly", ""))}</td>
+                </tr>"""
+
     issue_rows = ""
     display_issues = issues[:500]
     for issue in display_issues:
@@ -534,7 +588,7 @@ def _build_html(results: dict) -> str:
         .header .meta {{ opacity: 0.9; font-size: 0.9em; }}
         .summary {{
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(7, 1fr);
             gap: 12px;
             margin-bottom: 20px;
         }}
@@ -657,10 +711,14 @@ def _build_html(results: dict) -> str:
                 <p>Total Issues</p>
             </div>
             <div class="summary-card warnings">
+                <h2>{cross_release_data.get("total", 0)}</h2>
+                <p>Cross-Release Refs</p>
+            </div>
+            <div class="summary-card anomalies">
                 <h2>{anomaly_data.get("total", 0)}</h2>
                 <p>Anomalies</p>
             </div>
-            <div class="summary-card anomalies">
+            <div class="summary-card" style="">
                 <h2>{len(errors)}</h2>
                 <p>Errors</p>
             </div>
@@ -723,6 +781,11 @@ def _build_html(results: dict) -> str:
         <div class="section">
             <h2>Anomaly Detection ({anomaly_data.get("total", 0)} found)</h2>
             {f'<div class="scroll-table"><table><thead><tr><th>Project</th><th>Metric</th><th>Value</th><th>Expected Range</th><th>Deviation %</th><th>Severity</th><th>Anomaly</th></tr></thead><tbody>{anomaly_rows}</tbody></table></div>' if anomaly_rows else '<p class="no-issues">No anomalies detected.</p>'}
+        </div>
+
+        <div class="section">
+            <h2>Cross-Release References ({cross_release_data.get("total", 0)} found)</h2>
+            {f'<div class="scroll-table"><table><thead><tr><th>Source Project</th><th>Source Release</th><th>Source Mark</th><th>Target Project</th><th>Target Release</th><th>Target Assembly</th></tr></thead><tbody>{cross_release_rows}</tbody></table></div>' if cross_release_rows else '<p class="no-issues">No cross-release references detected.</p>'}
         </div>
 
         <div class="section">

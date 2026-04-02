@@ -11,12 +11,23 @@ from typing import Dict, List, Optional, Tuple
 
 from .kiss_parser import KISSFile, KISSAssembly, KISSMinorMark
 from .project_scanner import ReleasePackage
+from . import pdf_extractor
 
 
 class Severity(Enum):
     ERROR = "Error"
     WARNING = "Warning"
     INFO = "Info"
+
+
+@dataclass
+class CrossReleaseRef:
+    source_project: str
+    source_release: str
+    source_mark: str
+    target_project: str
+    target_release: str
+    target_assembly: str
 
 
 @dataclass
@@ -41,6 +52,9 @@ class CrossReferenceResult:
     missing_from_erection: List[str] = field(default_factory=list)
     quantity_mismatches: List[Dict] = field(default_factory=list)
     issues: List[VerificationIssue] = field(default_factory=list)
+    pdf_verified: bool = False
+    pdf_callout_mismatches: List[Dict] = field(default_factory=list)
+    pdf_bom_mismatches: List[Dict] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -98,7 +112,10 @@ class CrossReferenceEngine:
         return list(self._results)
 
     def verify_release(
-        self, kiss_file: KISSFile, release: ReleasePackage
+        self,
+        kiss_file: KISSFile,
+        release: ReleasePackage,
+        use_pdf_verification: bool = True,
     ) -> CrossReferenceResult:
         result = CrossReferenceResult(
             project_name=release.project_name,
@@ -112,8 +129,62 @@ class CrossReferenceEngine:
         self._check_orphaned_gathers(kiss_file, release, result)
         self._check_missing_gathers(kiss_file, release, result)
 
+        if use_pdf_verification:
+            self._check_pdf_content(kiss_file, release, result)
+
         self._results.append(result)
         return result
+
+    def detect_cross_release_references(
+        self,
+        release_data: Dict[str, Tuple["KISSFile", "ReleasePackage"]],
+    ) -> List[CrossReleaseRef]:
+        assembly_locations: Dict[str, List[Tuple[str, str]]] = {}
+        for key, (kiss, release) in release_data.items():
+            project = release.project_name
+            rel_name = os.path.basename(release.release_path)
+            for asm_mark in kiss.assemblies:
+                upper = asm_mark.upper()
+                assembly_locations.setdefault(upper, []).append((project, rel_name))
+
+        refs: List[CrossReleaseRef] = []
+        seen: set = set()
+        for key, (kiss, release) in release_data.items():
+            project = release.project_name
+            rel_name = os.path.basename(release.release_path)
+            for mm in kiss.all_minor_marks:
+                if not mm.assembly_mark:
+                    continue
+                asm_upper = mm.assembly_mark.upper()
+                locations = assembly_locations.get(asm_upper)
+                if not locations:
+                    continue
+                for target_project, target_release in locations:
+                    if target_project == project and target_release == rel_name:
+                        continue
+                    source_mark = mm.minor_mark or mm.major_mark
+                    ref_key = (
+                        project,
+                        rel_name,
+                        source_mark,
+                        target_project,
+                        target_release,
+                        mm.assembly_mark,
+                    )
+                    if ref_key in seen:
+                        continue
+                    seen.add(ref_key)
+                    refs.append(
+                        CrossReleaseRef(
+                            source_project=project,
+                            source_release=rel_name,
+                            source_mark=source_mark,
+                            target_project=target_project,
+                            target_release=target_release,
+                            target_assembly=mm.assembly_mark,
+                        )
+                    )
+        return refs
 
     def _check_all_details_on_erection(
         self,
@@ -142,19 +213,16 @@ class CrossReferenceEngine:
             )
 
             if not found_detail:
-                if not any(
-                    dm == major_upper or dm == asm_upper for dm in detail_mark_set
-                ):
-                    issue = VerificationIssue(
-                        severity=Severity.WARNING,
-                        check_type="detail_sheet_missing",
-                        project=release.project_name,
-                        release=result.release_name,
-                        mark=major,
-                        description=f"Assembly '{major}' has no corresponding detail sheet PDF",
-                        detail={"assembly_mark": asm_mark, "major_mark": major},
-                    )
-                    result.issues.append(issue)
+                issue = VerificationIssue(
+                    severity=Severity.WARNING,
+                    check_type="detail_sheet_missing",
+                    project=release.project_name,
+                    release=result.release_name,
+                    mark=major,
+                    description=f"Assembly '{major}' has no corresponding detail sheet PDF",
+                    detail={"assembly_mark": asm_mark, "major_mark": major},
+                )
+                result.issues.append(issue)
 
             found_on_erection = _match_detail_to_erection(
                 major, erection_marks_from_pdfs
@@ -275,6 +343,118 @@ class CrossReferenceEngine:
                     },
                 )
                 result.issues.append(issue)
+
+    def _check_pdf_content(
+        self,
+        kiss: KISSFile,
+        release: ReleasePackage,
+        result: CrossReferenceResult,
+    ) -> None:
+        if not pdf_extractor.FITZ_AVAILABLE:
+            return
+
+        kiss_asm_set = set(kiss.assemblies.keys())
+        kiss_global_bom = kiss.get_global_bom()
+
+        for erection_path in release.erection_sheet_paths:
+            try:
+                callouts = pdf_extractor.extract_erection_callouts(erection_path)
+            except Exception:
+                continue
+
+            for callout in callouts:
+                callout_upper = callout.upper()
+                matched = any(
+                    callout_upper == asm.upper() or callout_upper in asm.upper()
+                    for asm in kiss_asm_set
+                )
+                if not matched:
+                    mismatch = {
+                        "erection_pdf": os.path.basename(erection_path),
+                        "callout": callout,
+                        "kiss_assemblies": sorted(kiss_asm_set),
+                    }
+                    result.pdf_callout_mismatches.append(mismatch)
+                    issue = VerificationIssue(
+                        severity=Severity.WARNING,
+                        check_type="pdf_callout_mismatch",
+                        project=release.project_name,
+                        release=result.release_name,
+                        mark=callout,
+                        description=(
+                            f"Erection sheet '{os.path.basename(erection_path)}' "
+                            f"contains callout '{callout}' not found in KISS assemblies"
+                        ),
+                        detail=mismatch,
+                    )
+                    result.issues.append(issue)
+
+        for gather_path in release.gather_sheet_paths:
+            try:
+                bom_items = pdf_extractor.extract_gather_bom(gather_path)
+            except Exception:
+                continue
+
+            for item in bom_items:
+                mark_upper = item.mark.upper()
+                kiss_qty = kiss_global_bom.get(
+                    mark_upper, kiss_global_bom.get(item.mark, None)
+                )
+                if kiss_qty is not None and item.qty != kiss_qty:
+                    mismatch = {
+                        "gather_pdf": os.path.basename(gather_path),
+                        "mark": item.mark,
+                        "pdf_qty": item.qty,
+                        "kiss_qty": kiss_qty,
+                        "shape": item.shape,
+                        "grade": item.grade,
+                    }
+                    result.pdf_bom_mismatches.append(mismatch)
+                    issue = VerificationIssue(
+                        severity=Severity.WARNING,
+                        check_type="pdf_bom_qty_mismatch",
+                        project=release.project_name,
+                        release=result.release_name,
+                        mark=item.mark,
+                        description=(
+                            f"Gather sheet '{os.path.basename(gather_path)}' "
+                            f"BOM qty for '{item.mark}': PDF={item.qty}, KISS={kiss_qty}"
+                        ),
+                        detail=mismatch,
+                    )
+                    result.issues.append(issue)
+
+        for detail_path in release.detail_sheet_paths:
+            try:
+                detail_info = pdf_extractor.extract_detail_sheet_info(detail_path)
+            except Exception:
+                continue
+
+            if not detail_info.assembly_mark:
+                continue
+
+            asm_upper = detail_info.assembly_mark.upper()
+            if asm_upper not in kiss_asm_set:
+                issue = VerificationIssue(
+                    severity=Severity.INFO,
+                    check_type="pdf_detail_assembly_unknown",
+                    project=release.project_name,
+                    release=result.release_name,
+                    mark=detail_info.assembly_mark,
+                    description=(
+                        f"Detail sheet '{os.path.basename(detail_path)}' "
+                        f"references assembly '{detail_info.assembly_mark}' "
+                        f"not found in KISS data"
+                    ),
+                    detail={
+                        "detail_pdf": os.path.basename(detail_path),
+                        "assembly_mark": detail_info.assembly_mark,
+                        "minor_marks_found": detail_info.minor_marks,
+                    },
+                )
+                result.issues.append(issue)
+
+        result.pdf_verified = True
 
 
 def aggregate_results(results: List[CrossReferenceResult]) -> Dict:
