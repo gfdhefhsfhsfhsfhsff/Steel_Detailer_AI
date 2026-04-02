@@ -61,6 +61,13 @@ steel-detailer-ai/
 sds2_scraper/node_modules/
 sds2_scraper/.doc_index_cache.pkl
 
+# Generated output
+qa_output/
+extracted_data/
+
+# Template revision scripts
+revise_templates.py
+
 # Sensitive files
 .env
 *.env

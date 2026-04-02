@@ -2,7 +2,6 @@
 Erection Plan Continuity Module
 Cross-references all details on detail sheets to ensure they are accurately called out and represented on erection plans
 Flags any orphaned details.
-Author: John May
 Version: 1.0.0-alpha
 """
 

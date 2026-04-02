@@ -9,5 +9,5 @@ for exact location references to your/ design and standards in see the final rep
  Please check erection plan callouts, etc.
 
  
-================================================================================GitHub: https://github.com/gfdhefhsfhsfhsfhsff/Steel_Detailer_AI
+================================================================================
 

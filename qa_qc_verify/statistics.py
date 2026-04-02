@@ -1,7 +1,6 @@
 """
 Statistical Baseline Computation for Steel Detailing Portfolio
 Computes baselines from all KISS projects to identify anomalies.
-Author: John May
 """
 
 import math

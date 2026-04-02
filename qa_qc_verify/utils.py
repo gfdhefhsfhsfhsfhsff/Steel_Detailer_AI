@@ -1,6 +1,5 @@
 """
 Utility functions and progress tracking
-Author: John May
 Version: 1.0.0-alpha
 """
 

@@ -14,7 +14,6 @@ Install as toolbar button:
   2. Script: <path_to_this_file>
   3. Label: QA/QC
 
-Author: John May
 Version: 1.1.0
 """
 

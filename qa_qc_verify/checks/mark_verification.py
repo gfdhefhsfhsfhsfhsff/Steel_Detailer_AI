@@ -1,7 +1,6 @@
 """
 Mark Verification Module
 Verifies all member piecemarks are user-assigned drawing marks
-Author: John May
 Version: 1.0.0-alpha
 """
 

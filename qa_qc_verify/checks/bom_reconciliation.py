@@ -1,7 +1,6 @@
 """
 BOM Reconciliation Module
 Compares Gather Sheet BOM against aggregate Detail Sheet BOMs
-Author: John May
 Version: 1.0.0-alpha
 """
 

@@ -1,7 +1,6 @@
 """
 KISS File Parser for SDS/2 Steel Detailing Data
 Parses KISS v1.1 format files (.kss) exported from SDS/2
-Author: John May
 """
 
 import os

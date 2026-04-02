@@ -1,6 +1,5 @@
 """
 Report generation for QA/QC verification results
-Author: John May
 Version: 1.0.0-alpha
 """
 

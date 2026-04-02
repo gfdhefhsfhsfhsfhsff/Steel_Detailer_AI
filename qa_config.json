@@ -1,12 +1,11 @@
 {
-    "data_directory": "C:/SDS2/Data",
     "job_name": "Current Job",
     "fabricator_id": "DEFAULT",
     "output_path": "./qa_qc_report.html",
     "page_margin_inches": 0.5,
-    "db_host": "localhost",
+    "db_host": "",
     "db_port": 5432,
     "db_name": "sds2_standards",
-    "db_user": "postgres",
+    "db_user": "",
     "db_password": ""
 }

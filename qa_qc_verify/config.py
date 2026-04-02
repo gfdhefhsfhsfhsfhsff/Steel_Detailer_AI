@@ -1,6 +1,5 @@
 """
 Configuration management and PostgreSQL standards repository
-Author: John May
 Version: 1.0.0-alpha
 """
 

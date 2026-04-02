@@ -4,7 +4,6 @@ from __future__ import annotations
 Main entry point for QA/QC verification.
 Works on whatever job is currently open in SDS/2.
 No config file required — auto-detects job from the active SDS/2 session.
-Author: John May
 Version: 1.1.0
 """
 

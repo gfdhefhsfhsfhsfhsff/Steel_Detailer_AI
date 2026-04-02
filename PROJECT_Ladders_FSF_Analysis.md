@@ -1,9 +1,9 @@
-# FedEx - Ladders FSF - Complete Steel Detailing Release Package Analysis
-## Project: Lexington County Logistics Center (FedEx)
-## Location: 9184 Old Atlanta Hwy, Covington, Georgia 30014
-## Fabricator: Piedmont Steel, LLC / Detailer: Wasendorf Detailing
-## Architect/Engineer: LS3P Associates, Ltd.
-## Detailer: SRK | Checker: NMS
+# <PROJECT_name> - Ladders FSF - Complete Steel Detailing Release Package Analysis
+## Project: <Project Type>
+## Location: [Address Removed]
+## Fabricator: [Fabricator Name Removed] / Detailer: [Detailer Name Removed]
+## Architect/Engineer: [Architect/Engineer Name Removed]
+## Detailer: [Initials Removed] | Checker: [Initials Removed]
 ## Date: 08/30/2022 (Rev 0 - Field Use / Fabrication)
 
 ---
@@ -12,7 +12,7 @@
 
 | # | Category | File | Description |
 |---|----------|------|-------------|
-| 1 | Master | FedEx_Ladders FSF_083022.pdf | Complete 32-page bound set |
+| 1 | Master | <PROJECT_name>_Ladders FSF_083022.pdf | Complete 32-page bound set |
 | 2-7 | Detail Sheets | M104_0.pdf, M105_0.pdf, M118_0.pdf, M125_0.pdf, M126_0.pdf, M127_0.pdf | Individual detail sheets |
 | 8-10 | Erection Sheets | ME1.3_0.pdf, ME1.4_0.pdf, ME1.12_0.pdf | Erection/field plans |
 | 11-34 | Gather Sheets | a52, a55, a60, a61, bp4, p127, p15, p17, p207, p212, p213, p214, p217, p265, p266, p37, p38, p65, p68, p127, rb3, rb5, rb8, wt1 | Submaterial details |
@@ -116,7 +116,7 @@
 
 ---
 
-### Sheet ME1.12 - Roof Access Ladder (VMG)
+### Sheet ME1.12 - Roof Access Ladder (<Initials>)
 **Revision History:**
 - A: Aug 18 2022 - For Engineering
 - B: Aug 24 2022 - For Approval

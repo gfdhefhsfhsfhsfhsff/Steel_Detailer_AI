@@ -1,5 +1,5 @@
 -- PostgreSQL Schema for Fabricator Standards
--- Author: John May
+
 -- Version: 1.0.0-alpha
 -- Database: sds2_standards
 
@@ -230,7 +230,7 @@ INSERT INTO fabricator_standards
     (fabricator_id, fabricator_name, major_prefixes, minor_prefixes, system_patterns, page_margin_inches)
 VALUES (
     'FAB001',
-    'Steel Fabricators Inc.',
+    'Sample Fabricator',
 
     '{"B": "Beam", "C": "Column", "VB": "Vertical Brace", "HB": "Horizontal Brace", '
     || '"J": "Joist", "G": "Girt", "P": "Purlin", "PL": "Plate", '

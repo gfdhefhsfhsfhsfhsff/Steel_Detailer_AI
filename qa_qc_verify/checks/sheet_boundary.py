@@ -1,7 +1,6 @@
 """
 Sheet Boundary & Overrun Check
 Analyzes all detail and erection sheets for content that fits within sheet borders
-Author: John May
 Version: 1.0.0-alpha
 """
 

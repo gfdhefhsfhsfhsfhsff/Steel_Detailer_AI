@@ -1,7 +1,6 @@
 """
 Standalone QA/QC Scanner - Portfolio-wide scan from KISS files and filesystem data
 Does NOT require SDS2 API. Processes all 424+ steel detailing projects from disk.
-Author: John May
 Version: 1.0.0-alpha
 """
 

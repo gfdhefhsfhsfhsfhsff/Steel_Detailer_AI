@@ -15,11 +15,11 @@ This session had two parallel workstreams:
 The "Detailing with Templates" system stores templates as **plain JSON files** at:
 
 ```
-F:\ProgramData\SDS2_2026\detailing\SDS2\          ← 268 base templates
-F:\ProgramData\SDS2_2026\detailing\SDS2\US\        ← 268 US-imperial overrides
-F:\ProgramData\SDS2_2026\detailing\SDS2\US_FitUp\  ← 211 fit-up drawing variants
-F:\ProgramData\SDS2_2025\detailing\SDS2\US\        ← 267 US-imperial (2025)
-F:\ProgramData\SDS2_2025\detailing\SDS2\US_FitUp\  ← 211 fit-up (2025)
+<SDS2_DATA_DIR>/detailing/SDS2/          ← 268 base templates
+<SDS2_DATA_DIR>/detailing/SDS2/US\        ← 268 US-imperial overrides
+<SDS2_DATA_DIR>/detailing/SDS2/US_FitUp\  ← 211 fit-up drawing variants
+<SDS2_DATA_DIR>/detailing/SDS2/US\        ← 267 US-imperial (2025)
+<SDS2_DATA_DIR>/detailing/SDS2/US_FitUp\  ← 211 fit-up (2025)
 ```
 
 The `fabs\` folder (per-fabricator overrides) is currently empty at both versions — this is where customized templates should be deployed.
@@ -27,8 +27,8 @@ The `fabs\` folder (per-fabricator overrides) is currently empty at both version
 ### Backups Created
 
 ```
-F:\ProgramData\SDS2_2026\detailing_old\   ← exact copy of 2026 detailing/
-F:\ProgramData\SDS2_2025\detailing_old\   ← exact copy of 2025 detailing/
+<SDS2_BACKUP_DIR>/   ← exact copy of 2026 detailing/
+<SDS2_BACKUP_DIR>/   ← exact copy of 2025 detailing/
 ```
 
 ### Template File Format
@@ -106,7 +106,7 @@ Each template is JSON with this structure:
 
 ### Project Data Landscape
 
-Source: `F:\WD Projects (total company)\` — 424 project folders
+Source: `<projects_root>\` — 424 project folders
 
 | Metric | Count |
 |--------|-------|
@@ -119,10 +119,10 @@ Source: `F:\WD Projects (total company)\` — 424 project folders
 
 ### Directory Structure (typical project)
 ```
-F:\WD Projects (total company)\
-├── 2202 Project Elephant\
-│   ├── PE_Design\                    ← design/architectural PDFs
-│   └── PE_Release\
+<projects_root>\
+├── 2202 Project A\
+│   ├── PA_Design\                    ← design/architectural PDFs
+│   └── PA_Release\
 │       └── 004 Misc\
 │           └── 07 Cage Ladder FSF_102222\
 │               ├── Detail Sheet\      or Detail Sheets\PDF\
@@ -151,7 +151,7 @@ Record types: `H`=header, `D`=detail line, `W`=worksheet, `M`=member, `*`=separa
 
 ### New Modules Written
 
-All in `C:\Users\test\source\repos\Steel_Detailer_AI\qa_qc_verify\`:
+All in `./qa_qc_verify\`:
 
 | File | Size | Purpose |
 |------|------|---------|
@@ -179,7 +179,7 @@ All in `C:\Users\test\source\repos\Steel_Detailer_AI\qa_qc_verify\`:
 
 ### KISS Parser — Verified Working
 ```python
-# Test: parsed Elephant Cage Ladder KISS file
+# Test: parsed Project A Cage Ladder KISS file
 Assemblies: 1
 Minor marks: 8
 GlobalBOM: {'a466': 2, 'a464': 1, 'a465': 1, 'p652': 8, 'p647': 1, 'p145': 3, 'p646': 7}
@@ -187,8 +187,8 @@ GlobalBOM: {'a466': 2, 'a464': 1, 'a465': 1, 'p652': 8, 'p647': 1, 'p145': 3, 'p
 
 ### Project Scanner — Verified Working
 ```python
-# Test: scanned GP Stairs project
-Project: 2267 GP Stairs
+# Test: scanned Project B project
+Project: 2267 Project B
 Releases: 3
 # Each release correctly identified with has_kiss, has_detail_sheets, etc.
 ```
@@ -200,7 +200,7 @@ Releases: 3
 - Processes all 424 projects in one pass
 - Cross-references via filename matching (no PDF OCR)
 - Generates HTML + JSON reports
-- Command: `python -m qa_qc_verify.scan_runner "F:\WD Projects (total company)" ./qa_output`
+- Command: `python -m qa_qc_verify.scan_runner "<projects_root>" ./qa_output`
 
 **Mode 2 — In-Process (existing):** `run.py`
 - Runs inside SDS2 via its .NET/Python API
@@ -212,20 +212,20 @@ Releases: 3
 
 ## 3. Detailed PDF Analysis Results
 
-### Elephant Cage Ladder (Project 2202, Release 07)
+### Project A Cage Ladder (Project 2202, Release 07)
 - **1 assembly**: M129L1 (Ladder, 398 lbs)
 - **8 minor marks**: a464, a465, a466, rb106, p145, p646, p647, p652
 - **42 total parts**, 10 field anchors (HILTI KB-TZ2)
 - KISS data matches Material Summary exactly
 
-### FedEx Ladders (Project 2144, Release 04)
+### Project E Ladders (Project 2144, Release 04)
 - **10 members**: 3 ladders, 4 guardrails, 2 columns, 1 angle
 - **35 PDFs** across detail/erection/gather/reports
 - **55 round bar rungs** total across 3 ladders
 - 3,013 lbs total weight
 - Note: p214 references M122M4 from a different release (cross-package reference)
 
-### Elephant Misc (Project 2202, Releases 04 & 05)
+### Project A Misc (Project 2202, Releases 04 & 05)
 - **Package 1**: 51 assemblies, 29 detail sheets, 11 erection sheets, 109 gather sheets
 - **Package 2**: 26 assemblies, 12 detail sheets, 4 erection sheets, 65 gather sheets
 - **5 quantity mismatches found**:
@@ -236,7 +236,7 @@ Releases: 3
   - `CP2`: cross-package conflict (4 vs 12)
 - Cross-package shared marks: BP1, CP2, p322, hss1299
 
-### FedEx Anchor Bolts (Project 2144, Release AB)
+### Project E Anchor Bolts (Project 2144, Release AB)
 - 476 total anchor bolt assemblies (456 AB1 + 20 AB2)
 - 7 erection sheets (AB1.1–AB1.7)
 - 114 Section A locations, 5 Section B locations
@@ -316,7 +316,7 @@ After stair templates are validated, move to:
 
 ### Project Repository
 ```
-C:\Users\test\source\repos\Steel_Detailer_AI\
+./
 ├── qa_qc_verify\               ← Main tool package
 │   ├── kiss_parser.py           ← NEW: KISS file parser
 │   ├── project_scanner.py       ← NEW: Directory scanner
@@ -338,29 +338,29 @@ C:\Users\test\source\repos\Steel_Detailer_AI\
 
 ### SDS2 Installation
 ```
-F:\Program Files\SDS2_2026\2026-1\bin\     ← SDS2 2026 binaries
-F:\Program Files\SDS2_2025\2025-1\bin\     ← SDS2 2025 binaries
-F:\ProgramData\SDS2_2026\detailing\         ← 2026 templates (ACTIVE)
-F:\ProgramData\SDS2_2026\detailing_old\     ← 2026 templates (BACKUP)
-F:\ProgramData\SDS2_2026\fabs\              ← 2026 fabricator overrides (EMPTY)
-F:\ProgramData\SDS2_2025\detailing\         ← 2025 templates (ACTIVE)
-F:\ProgramData\SDS2_2025\detailing_old\     ← 2025 templates (BACKUP)
+<SDS2_INSTALL_DIR>/bin/     ← SDS2 2026 binaries
+<SDS2_INSTALL_DIR>/bin/     ← SDS2 2025 binaries
+<SDS2_DATA_DIR>/detailing/         ← 2026 templates (ACTIVE)
+<SDS2_BACKUP_DIR>/     ← 2026 templates (BACKUP)
+<SDS2_DATA_DIR>/fabs/              ← 2026 fabricator overrides (EMPTY)
+<SDS2_DATA_DIR>/detailing/         ← 2025 templates (ACTIVE)
+<SDS2_BACKUP_DIR>/     ← 2025 templates (BACKUP)
 ```
 
 ### Project Data
 ```
-F:\WD Projects (total company)\             ← 424 project folders
-├── 2267 GP Stairs\                         ← Stair-only project
-├── 2230 Medtronic Stair\                   ← Stair-only project
-├── 25014 Carver HS Rails\                  ← Rail-only project
-├── 2202 Project Elephant\                  ← Full building (stair + rail + misc)
-├── 2144 Fed Ex\                            ← Full building (ladders + AB + structural)
+<projects_root>\             ← 424 project folders
+├── 2267 Project B\                         ← Stair-only project
+├── 2230 Project C\                   ← Stair-only project
+├── 25014 Project D\                  ← Rail-only project
+├── 2202 Project A\                  ← Full building (stair + rail + misc)
+├── 2144 Project E\                            ← Full building (ladders + AB + structural)
 └── ... (419 more)
 ```
 
 ### Scraped Documentation
 ```
-C:\Users\test\source\repos\Steel_Detailer_AI\sds2_scraper\output\
+./sds2_scraper\output\
 ├── 2026\API\DesignData\SDS2\              ← 1,511 scraped API docs
 └── 2025-1\API\DesignData\SDS2\            ← Same for 2025-1
 ```

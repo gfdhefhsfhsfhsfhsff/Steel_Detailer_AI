@@ -1,7 +1,6 @@
 """
 Steel Detailer AI - Error Prompts
 Easy-to-understand error messages with causes and fixes for every failure point.
-Author: John May
 Version: 1.0.0-alpha
 """
 

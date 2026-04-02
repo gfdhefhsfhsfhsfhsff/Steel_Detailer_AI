@@ -46,6 +46,6 @@
 
 ## 📘 Agent Handoff Context & Technical Notes
 - **Workspace Location**: Portable — all scripts use relative paths from the repo root
-- **SDS/2 Dependencies**: The project requires `C:\Program Files\SDS2_2026\2026\bin\` to compile. Standard `DataDirectory.Open(DataDirectory.Default)` is used.
+- **SDS/2 Dependencies**: The project requires `<SDS2_INSTALL_DIR>/bin/` to compile. Standard `DataDirectory.Open(DataDirectory.Default)` is used.
 - **Crucial Rule on SDS2 .NET Locking**: Never bypass `ILockHandler`. Always instantiate `new Transaction(job, new ImmediateLockHandler())`, execute `.Add(handle)`, verify `.Lock()`, alter properties, and call `.Commit()`. The `.NET` API will crash or corrupt data if properties are changed outside an active lock.
-- **Reference Docs**: The user has successfully scraped `.md` API documentation locally. Utilize `grep_search` heavily on `d:\Steel_Detailer_AI\sds tooling\output\2026\API\` to discover properties and handle constraints (e.g., `CustomPropertyMapHandle`).
+- **Reference Docs**: The user has successfully scraped `.md` API documentation locally. Utilize `grep_search` heavily on `./sds tooling/output/2026/API/` to discover properties and handle constraints (e.g., `CustomPropertyMapHandle`).
