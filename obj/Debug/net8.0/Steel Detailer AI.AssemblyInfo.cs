@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Steel Detailer AI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+faafd02b4c003e39ff05f31aff15c1fbb9850f0b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b3a59852448d6ffedc0793042b3169ef24c3cf97")]
 [assembly: System.Reflection.AssemblyProductAttribute("Steel Detailer AI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Steel Detailer AI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
