@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steel-detailer-mcp"
+version = "0.1.0"
+description = "MCP server exposing SDS/2 QA/QC steel detailing verification tools"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+]
+
+[project.optional-dependencies]
+pdf = ["PyMuPDF", "pdfplumber"]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+steel-detailer-mcp = "steel_detailer_mcp.server:main"
+memory-bank-mcp = "memory_bank_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["steel_detailer_mcp*", "qa_qc_verify*", "memory_bank_mcp*"]
