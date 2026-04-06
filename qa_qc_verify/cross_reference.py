@@ -11,7 +11,11 @@ from typing import Dict, List, Optional, Tuple
 
 from .kiss_parser import KISSFile, KISSAssembly, KISSMinorMark
 from .project_scanner import ReleasePackage
-from . import pdf_extractor
+
+try:
+    from . import pdf_extractor
+except ImportError:
+    pdf_extractor = None
 
 
 class Severity(Enum):
@@ -350,7 +354,7 @@ class CrossReferenceEngine:
         release: ReleasePackage,
         result: CrossReferenceResult,
     ) -> None:
-        if not pdf_extractor.FITZ_AVAILABLE:
+        if pdf_extractor is None or not getattr(pdf_extractor, "FITZ_AVAILABLE", False):
             return
 
         kiss_asm_set = set(kiss.assemblies.keys())

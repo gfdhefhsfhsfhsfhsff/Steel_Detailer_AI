@@ -195,12 +195,14 @@ def run_full_scan(projects_root: str, output_dir: str, focus: str = "all") -> di
         if key not in kiss_files:
             continue
         try:
-            result = engine.verify_release(kiss_files[key], release)
+            result = engine.verify_release(
+                kiss_files[key], release, use_pdf_verification=False
+            )
             xref_results.append(result)
         except Exception as e:
             errors.append(f"XRef error for {key}: {e}")
-        if done % 50 == 0 or done == total_verify:
-            progress.print_progress(done, total_verify, f"verifying releases")
+        if done % 10 == 0 or done == total_verify:
+            progress.print_progress(done, total_verify, "verifying releases")
 
     aggregated = aggregate_results(xref_results) if xref_results else {}
     progress.end_phase(f"{len(xref_results)} releases verified")
@@ -395,10 +397,8 @@ def _serialize_anomaly(anomaly: AnomalyReport) -> Dict[str, Any]:
 def generate_json_report(results: dict, output_path: str) -> None:
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    serializable = _make_serializable(results)
-
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(serializable, f, indent=2, default=str)
+        json.dump(results, f, indent=2, default=str)
 
 
 def _make_serializable(obj: Any) -> Any:

@@ -44,102 +44,163 @@ def _parse_release_info(name: str) -> Tuple[str, Optional[str]]:
     return release_type, date
 
 
-def _collect_pdfs(directory: str) -> List[str]:
-    pdfs: List[str] = []
+def _looks_like_release(path: str) -> bool:
+    indicators = {
+        "Detail Sheet",
+        "Detail Sheets",
+        "Erection Sheet",
+        "Erection Sheets",
+        "Gather Sheet",
+        "Gather Sheets",
+        "Reports",
+        "CNC",
+        "KISS",
+        "Material Summary",
+    }
     try:
-        for entry in os.scandir(directory):
-            if entry.is_file() and entry.name.lower().endswith(".pdf"):
-                pdfs.append(entry.path)
-    except (PermissionError, OSError):
-        pass
-    return pdfs
-
-
-def _find_sheet_pdfs(release_dir: str, base_name: str) -> Tuple[bool, List[str]]:
-    variants = [base_name.lower(), base_name.lower() + "s"]
-    try:
-        for entry in os.scandir(release_dir):
-            if not entry.is_dir():
-                continue
-            if entry.name.lower() in variants:
-                pdf_sub = os.path.join(entry.path, "PDF")
-                if os.path.isdir(pdf_sub):
-                    return True, _collect_pdfs(pdf_sub)
-                return True, _collect_pdfs(entry.path)
-    except (PermissionError, OSError):
-        pass
-    return False, []
-
-
-def _find_kiss(release_dir: str) -> Tuple[bool, Optional[str]]:
-    search_dirs: List[str] = []
-    reports_dir = os.path.join(release_dir, "Reports")
-    if os.path.isdir(reports_dir):
-        try:
-            for entry in os.scandir(reports_dir):
-                if entry.is_dir():
-                    search_dirs.append(entry.path)
-        except (PermissionError, OSError):
-            pass
-        search_dirs.append(reports_dir)
-    search_dirs.append(release_dir)
-
-    for d in search_dirs:
-        try:
-            for entry in os.scandir(d):
-                if entry.is_file() and entry.name.lower().endswith(".kss"):
-                    return True, entry.path
-        except (PermissionError, OSError):
-            pass
-    return False, None
-
-
-def _find_material_summary(release_dir: str) -> Tuple[bool, List[str]]:
-    paths: List[str] = []
-    search_dirs = [release_dir]
-    reports_dir = os.path.join(release_dir, "Reports")
-    if os.path.isdir(reports_dir):
-        search_dirs.append(reports_dir)
-    for d in search_dirs:
-        try:
-            for entry in os.scandir(d):
-                if not entry.is_file():
-                    continue
+        for entry in os.scandir(path):
+            if entry.is_dir() and entry.name in indicators:
+                return True
+            if entry.is_file():
                 low = entry.name.lower()
-                if low.startswith("material summary") and (
-                    low.endswith(".pdf") or low.endswith(".xlsx")
-                ):
-                    paths.append(entry.path)
-        except (PermissionError, OSError):
-            pass
-    return bool(paths), paths
+                if low.endswith(".kss") or low.startswith("material summary"):
+                    return True
+    except (PermissionError, OSError):
+        pass
+    return False
+
+
+def _scan_release_files(release_dir: str):
+    kiss_path = None
+    detail_pdfs: List[str] = []
+    erection_pdfs: List[str] = []
+    gather_pdfs: List[str] = []
+    material_paths: List[str] = []
+
+    detail_variants = {"detail sheet", "detail sheets"}
+    erection_variants = {"erection sheet", "erection sheets"}
+    gather_variants = {"gather sheet", "gather sheets"}
+
+    for root, dirs, files in os.walk(release_dir):
+        dirname_lower = os.path.basename(root).lower()
+        parent_lower = os.path.basename(os.path.dirname(root)).lower()
+
+        if kiss_path is None:
+            for f in files:
+                if f.lower().endswith(".kss"):
+                    kiss_path = os.path.join(root, f)
+                    break
+
+        if dirname_lower in detail_variants or parent_lower in detail_variants:
+            detail_pdfs.extend(
+                os.path.join(root, f) for f in files if f.lower().endswith(".pdf")
+            )
+        elif dirname_lower in erection_variants or parent_lower in erection_variants:
+            erection_pdfs.extend(
+                os.path.join(root, f) for f in files if f.lower().endswith(".pdf")
+            )
+        elif dirname_lower in gather_variants or parent_lower in gather_variants:
+            gather_pdfs.extend(
+                os.path.join(root, f) for f in files if f.lower().endswith(".pdf")
+            )
+
+        for f in files:
+            low = f.lower()
+            if low.startswith("material summary") and (
+                low.endswith(".pdf") or low.endswith(".xlsx")
+            ):
+                material_paths.append(os.path.join(root, f))
+
+    return kiss_path, detail_pdfs, erection_pdfs, gather_pdfs, material_paths
 
 
 def _scan_release(release_dir: str, project_name: str, category: str) -> ReleasePackage:
     folder_name = os.path.basename(release_dir)
     release_type, date = _parse_release_info(folder_name)
-    has_kiss, kiss_path = _find_kiss(release_dir)
-    has_detail, detail_pdfs = _find_sheet_pdfs(release_dir, "Detail Sheet")
-    has_erection, erection_pdfs = _find_sheet_pdfs(release_dir, "Erection Sheet")
-    has_gather, gather_pdfs = _find_sheet_pdfs(release_dir, "Gather Sheet")
-    has_mat, mat_paths = _find_material_summary(release_dir)
+    kiss_path, detail_pdfs, erection_pdfs, gather_pdfs, mat_paths = _scan_release_files(
+        release_dir
+    )
     return ReleasePackage(
         project_name=project_name,
         release_path=release_dir,
         category=category,
         release_type=release_type,
         date=date,
-        has_kiss=has_kiss,
+        has_kiss=kiss_path is not None,
         kiss_path=kiss_path,
-        has_detail_sheets=has_detail,
-        has_erection_sheets=has_erection,
-        has_gather_sheets=has_gather,
-        has_material_summary=has_mat,
+        has_detail_sheets=bool(detail_pdfs),
+        has_erection_sheets=bool(erection_pdfs),
+        has_gather_sheets=bool(gather_pdfs),
+        has_material_summary=bool(mat_paths),
         detail_sheet_paths=detail_pdfs,
         erection_sheet_paths=erection_pdfs,
         gather_sheet_paths=gather_pdfs,
         material_summary_paths=mat_paths,
     )
+
+
+def _find_release_root(project_path: str) -> Tuple[Optional[str], bool]:
+    release_root = None
+    is_archive = False
+    try:
+        for entry in os.scandir(project_path):
+            if not entry.is_dir():
+                continue
+            name_lower = entry.name.lower()
+            if "release" in name_lower and release_root is None:
+                return entry.path, False
+            if entry.name == os.path.basename(project_path):
+                inner_path = _find_release_root(entry.path)
+                if inner_path[0]:
+                    return inner_path[0], True
+    except (PermissionError, OSError):
+        pass
+
+    if _looks_like_project_with_releases(project_path):
+        return project_path, True
+
+    return None, False
+
+
+def _looks_like_project_with_releases(path: str) -> bool:
+    try:
+        for entry in os.scandir(path):
+            if not entry.is_dir():
+                continue
+            name = entry.name
+            if name in (
+                "Detail Sheets",
+                "Detail Sheet",
+                "Erection Sheets",
+                "Erection Sheet",
+                "Gather Sheets",
+                "Gather Sheet",
+                "Reports",
+                "CNC",
+                "SDS2_Model",
+                "Design",
+            ):
+                return True
+            if entry.is_dir():
+                for sub in os.scandir(entry.path):
+                    if not sub.is_dir():
+                        continue
+                    if sub.name in (
+                        "Detail Sheets",
+                        "Detail Sheet",
+                        "Erection Sheets",
+                        "Erection Sheet",
+                        "Gather Sheets",
+                        "Gather Sheet",
+                        "Reports",
+                        "CNC",
+                        "PDF",
+                    ):
+                        return True
+                    break
+        return False
+    except (PermissionError, OSError):
+        return False
 
 
 def scan_project(project_path: str) -> ProjectCatalog:
@@ -168,14 +229,67 @@ def scan_project(project_path: str) -> ProjectCatalog:
                 category = entry.name
                 try:
                     for sub in os.scandir(entry.path):
-                        if sub.is_dir():
+                        if not sub.is_dir():
+                            continue
+                        if _looks_like_release(sub.path):
                             releases.append(
                                 _scan_release(sub.path, project_name, category)
                             )
+                        else:
+                            try:
+                                for inner in os.scandir(sub.path):
+                                    if inner.is_dir():
+                                        releases.append(
+                                            _scan_release(
+                                                inner.path, project_name, category
+                                            )
+                                        )
+                            except (PermissionError, OSError):
+                                pass
                 except (PermissionError, OSError):
                     pass
         except (PermissionError, OSError):
             pass
+
+    if not releases and not release_root:
+        found_root, is_arch = _find_release_root(project_path)
+        if found_root:
+            try:
+                for entry in os.scandir(found_root):
+                    if not entry.is_dir():
+                        continue
+                    if _looks_like_release(entry.path):
+                        releases.append(_scan_release(entry.path, project_name, ""))
+                    else:
+                        try:
+                            for sub in os.scandir(entry.path):
+                                if sub.is_dir():
+                                    if _looks_like_release(sub.path):
+                                        releases.append(
+                                            _scan_release(
+                                                sub.path, project_name, entry.name
+                                            )
+                                        )
+                                    else:
+                                        try:
+                                            for inner in os.scandir(sub.path):
+                                                if (
+                                                    inner.is_dir()
+                                                    and _looks_like_release(inner.path)
+                                                ):
+                                                    releases.append(
+                                                        _scan_release(
+                                                            inner.path,
+                                                            project_name,
+                                                            entry.name,
+                                                        )
+                                                    )
+                                        except (PermissionError, OSError):
+                                            pass
+                        except (PermissionError, OSError):
+                            pass
+            except (PermissionError, OSError):
+                pass
 
     return ProjectCatalog(
         project_name=project_name,
